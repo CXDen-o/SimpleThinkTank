@@ -1,0 +1,51 @@
+name: Release
+
+# 打 v* tag 触发:Windows 构建 NSIS 安装包,生成草稿 Release
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Build and create draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "智识库 v__VERSION__"
+          releaseBody: "更新内容见 [CHANGELOG](https://github.com/CXDeno/SimpleThinkTank/blob/main/CHANGELOG.md)。首次安装请阅读 [README](https://github.com/CXDeno/SimpleThinkTank#下载安装)。"
+          releaseDraft: true
+          prerelease: false
+
+      - name: Generate and upload SHA256 checksums
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $dir = "src-tauri/target/release/bundle/nsis"
+          $exe = Get-ChildItem "$dir/*.exe" | Select-Object -First 1
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($exe.Name)" | Out-File -FilePath "$dir/SHA256SUMS.txt" -Encoding ascii
+          gh release upload ${{ github.ref_name }} "$dir/SHA256SUMS.txt" --clobber

@@ -1,0 +1,75 @@
+[package]
+name = "zhishiku"
+version = "0.1.0"
+description = "智识库 - 本地私有化 RAG 桌面应用"
+authors = ["CXDeno"]
+license = "MIT"
+repository = "https://github.com/CXDeno/SimpleThinkTank"
+edition = "2021"
+rust-version = "1.80"
+
+[lib]
+name = "zhishiku_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+# Tauri 核心
+tauri = { version = "2.0", features = [] }
+tauri-plugin-dialog = "2.0"
+tauri-plugin-fs = "2.0"
+
+# 异步运行时
+tokio = { version = "1.40", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+async-trait = "0.1"
+
+# 数据库
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
+# sqlite-vec 向量检索扩展(静态链接进二进制,无外部分发文件)
+sqlite-vec = "0.1"
+libsqlite3-sys = "0.30"
+
+# HTTP 客户端（Ollama / ChromaDB）
+reqwest = { version = "0.12", features = ["json", "stream", "socks"] }
+futures-util = "0.3"
+
+# 进程管理
+libc = "0.2"
+
+# 日志
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+
+# 工具
+anyhow = "1.0"
+thiserror = "1.0"
+sha2 = "0.10"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "5.0"
+
+# 文档解析
+pdf-extract = "0.7"
+docx-rs = "0.4"
+encoding_rs = "0.8"
+
+# RAG 框架（阶段二引入，先占位）
+# langchain-rust = "0.3"
+
+[features]
+# 自定义协议
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1

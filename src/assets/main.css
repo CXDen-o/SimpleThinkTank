@@ -1,0 +1,225 @@
+/* ===== IDEA 风格主题变量 ===== */
+:root {
+  /* 主色调:IDEA 经典蓝 */
+  --el-color-primary: #3574d0;
+  --el-color-primary-light-3: #5a8fd9;
+  --el-color-primary-light-5: #8ab0e5;
+  --el-color-primary-light-7: #bad1ef;
+  --el-color-primary-light-8: #d3e1f5;
+  --el-color-primary-light-9: #e9f0fa;
+  --el-color-primary-dark-2: #2a5ba8;
+
+  /* 成功色 */
+  --el-color-success: #4a9b54;
+  --el-color-success-light-9: #e8f3e9;
+  --el-color-success-dark-2: #3a7a42;
+
+  /* 警告色 */
+  --el-color-warning: #c98a2b;
+  --el-color-warning-light-9: #faf2e3;
+
+  /* 危险色 */
+  --el-color-danger: #c54343;
+  --el-color-danger-light-9: #faeaea;
+
+  /* 背景:IDEA 灰白层次 */
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f4f5f7;
+  --el-bg-color-overlay: #ffffff;
+
+  /* 填充层 */
+  --el-fill-color: #eef0f3;
+  --el-fill-color-light: #e9ecf0;
+  --el-fill-color-lighter: #f4f5f7;
+  --el-fill-color-blank: #ffffff;
+
+  /* 文字 */
+  --el-text-color-primary: #1f1f20;
+  --el-text-color-regular: #3d3d40;
+  --el-text-color-secondary: #6e6e73;
+  --el-text-color-placeholder: #a8a8ad;
+  --el-text-color-disabled: #c0c0c5;
+
+  /* 边框 */
+  --el-border-color: #dadada;
+  --el-border-color-light: #e2e2e4;
+  --el-border-color-lighter: #ebebed;
+  --el-border-color-extra-light: #f0f0f2;
+
+  /* 圆角 */
+  --el-border-radius-base: 4px;
+  --el-border-radius-small: 3px;
+  --el-border-radius-round: 20px;
+
+  /* 字体 */
+  --el-font-size-base: 13px;
+  --el-font-size-small: 12px;
+  --el-font-size-medium: 15px;
+  --el-font-size-large: 17px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  width: 100%;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+}
+
+.app-container {
+  height: 100%;
+  width: 100%;
+}
+
+/* ===== 滚动条美化(IDEA 风格)===== */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c8cace;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8ad;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===== 全局按钮居中 ===== */
+.el-button {
+  justify-content: center;
+}
+
+.el-button > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ===== 全局表格居中 ===== */
+.el-table .cell {
+  text-align: center;
+}
+
+.el-table th .cell {
+  text-align: center;
+  font-weight: 600;
+}
+
+/* 左对齐的表格列(文件名等长文本) */
+.el-table .align-left .cell {
+  text-align: left;
+}
+
+/* ===== 全局表单标签 ===== */
+.el-form-item__label {
+  font-weight: 500;
+}
+
+/* ===== 全局标签页 ===== */
+.el-tabs__nav-wrap::after {
+  height: 1px;
+  background-color: var(--el-border-color-lighter);
+}
+
+.el-tabs__item {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--el-text-color-secondary);
+}
+
+.el-tabs__item.is-active {
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.el-tabs__active-bar {
+  background-color: var(--el-color-primary);
+  height: 2px;
+}
+
+/* ===== 全局对话框 ===== */
+.el-dialog__header {
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  margin-right: 0;
+  padding: 16px 20px;
+}
+
+.el-dialog__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.el-dialog__body {
+  padding: 20px;
+}
+
+.el-dialog__footer {
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding: 12px 20px;
+}
+
+/* ===== 全局卡片 ===== */
+.el-card {
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 4px;
+}
+
+.el-card__header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.el-card__body {
+  padding: 14px 16px;
+}
+
+/* ===== 全局进度条 ===== */
+.el-progress-bar__outer {
+  border-radius: 8px;
+}
+
+.el-progress-bar__inner {
+  border-radius: 8px;
+  transition: width 0.4s ease;
+}
+
+/* ===== 全局空状态 ===== */
+.el-empty__description p {
+  color: var(--el-text-color-secondary);
+}
+
+/* ===== 全局消息提示位置 ===== */
+.el-message {
+  min-width: 280px;
+}
+
+/* ===== 过渡动画 ===== */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}

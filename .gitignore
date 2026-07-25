@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+dist-ssr/
+*.local
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+src-tauri/logs/
+
+# Environment
+.env
+.env.local
+
+# Tauri
+src-tauri/WixTools/
+src-tauri/.cargo/
+
+# 项目内部文档(设计/需求文档,不公开)
+docs/
+src-tauri/PROGRESS.md
+
+# 本地一次性开发脚本与测试残留(不入库)
+dl.ps1
+download_ollama.py
+tags.json
+
+# 数据库文件(防御性规则;运行时数据本就不在仓库目录)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3

@@ -1,0 +1,47 @@
+{
+  "name": "zhishiku",
+  "private": true,
+  "version": "0.1.0",
+  "description": "智识库 - 本地私有化 RAG 桌面应用",
+  "author": "CXDeno",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CXDeno/SimpleThinkTank"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "lint": "eslint . --ext .vue,.js,.ts --fix",
+    "format": "prettier --write \"src/**/*.{vue,ts,js}\"",
+    "preflight": "node scripts/preflight-check.mjs"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/plugin-dialog": "^2.0.1",
+    "@tauri-apps/plugin-fs": "^2.0.1",
+    "element-plus": "^2.8.1",
+    "pinia": "^2.2.2",
+    "uuid": "^14.0.1",
+    "vue": "^3.4.38",
+    "vue-router": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.2",
+    "@types/node": "^22.5.0",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.4.0",
+    "@typescript-eslint/parser": "^8.4.0",
+    "@vitejs/plugin-vue": "^5.1.3",
+    "eslint": "^9.9.1",
+    "eslint-plugin-vue": "^9.28.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.3",
+    "vue-tsc": "^2.1.6"
+  }
+}
