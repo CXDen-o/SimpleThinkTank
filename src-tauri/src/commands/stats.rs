@@ -32,7 +32,7 @@ pub struct ModelDirStat {
 
 #[derive(Serialize)]
 pub struct StorageStats {
-    /// zhishiku.db(含 -wal/-shm)
+    /// simplethinktank.db(含 -wal/-shm)
     pub database_bytes: u64,
     /// knowledge_bases/ 目录总占用
     pub knowledge_bases_bytes: u64,

@@ -19,11 +19,11 @@ fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
     let log_dir = config::AppPaths::logs_dir();
     std::fs::create_dir_all(&log_dir).ok();
 
-    let file_appender = tracing_appender::rolling::daily(&log_dir, "zhishiku.log");
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "simplethinktank.log");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,zhishiku_lib=debug"));
+        .unwrap_or_else(|_| EnvFilter::new("info,simplethinktank_lib=debug"));
 
     tracing_subscriber::registry()
         .with(env_filter)

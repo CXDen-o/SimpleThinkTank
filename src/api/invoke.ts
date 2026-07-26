@@ -216,7 +216,7 @@ export interface ModelDirStat {
 
 /** 存储统计总览 */
 export interface StorageStats {
-  /** zhishiku.db(含 -wal/-shm) */
+  /** simplethinktank.db(含 -wal/-shm) */
   database_bytes: number;
   /** knowledge_bases/ 目录总占用 */
   knowledge_bases_bytes: number;

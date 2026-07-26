@@ -1,5 +1,5 @@
 // 应用路径管理模块
-// 统一管理 ~/Documents/Zhishiku/ 下的目录结构
+// 统一管理 ~/Documents/SimpleThinkTank/ 下的目录结构
 
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -12,13 +12,13 @@ pub use state::SettingsState;
 pub struct AppPaths;
 
 impl AppPaths {
-    /// 根存储目录: ~/Documents/Zhishiku/
+    /// 根存储目录: ~/Documents/SimpleThinkTank/
     pub fn root_dir() -> PathBuf {
         let docs = dirs::document_dir().unwrap_or_else(|| dirs::home_dir().unwrap());
-        docs.join("Zhishiku")
+        docs.join("SimpleThinkTank")
     }
 
-    /// 知识库存储目录: ~/Documents/Zhishiku/knowledge_bases/{kb_id}/
+    /// 知识库存储目录: ~/Documents/SimpleThinkTank/knowledge_bases/{kb_id}/
     pub fn knowledge_base_dir(kb_id: &str) -> PathBuf {
         Self::root_dir().join("knowledge_bases").join(kb_id)
     }
@@ -38,17 +38,17 @@ impl AppPaths {
         Self::knowledge_base_dir(kb_id).join("config.json")
     }
 
-    /// 全局数据库文件: ~/Documents/Zhishiku/zhishiku.db
+    /// 全局数据库文件: ~/Documents/SimpleThinkTank/simplethinktank.db
     pub fn database_path() -> PathBuf {
-        Self::root_dir().join("zhishiku.db")
+        Self::root_dir().join("simplethinktank.db")
     }
 
-    /// 日志目录: ~/Documents/Zhishiku/logs/
+    /// 日志目录: ~/Documents/SimpleThinkTank/logs/
     pub fn logs_dir() -> PathBuf {
         Self::root_dir().join("logs")
     }
 
-    /// 模型缓存目录: ~/Documents/Zhishiku/models/
+    /// 模型缓存目录: ~/Documents/SimpleThinkTank/models/
     pub fn models_dir() -> PathBuf {
         Self::root_dir().join("models")
     }

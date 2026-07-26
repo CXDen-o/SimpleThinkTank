@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "智识库",
+  "productName": "SimpleThinkTank",
   "version": "0.1.0",
-  "identifier": "com.zhishiku.simplethinktank",
+  "identifier": "com.simplethinktank.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -33,7 +33,8 @@
     "shortDescription": "本地私有化 RAG 知识库",
     "windows": {
       "nsis": {
-        "languages": ["SimpChinese", "English"]
+        "languages": ["SimpChinese", "English"],
+        "installerHooks": "./installer-hooks.nsh"
       }
     },
     "icon": [

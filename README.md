@@ -17,7 +17,7 @@
 - **智能滚动**：流式输出贴底跟随，上翻自由阅读，一键回到最新
 - **Ollama 托管**：自动检测 / 启动 / 退出确认，未安装时提供静默安装引导
 - **存储统计**：知识库文档 / 片段 / 向量 / 磁盘占用一目了然
-- **完全本地**：数据存于 `文档/Zhishiku/` 目录，卸载即清
+- **完全本地**：数据存于 `文档/SimpleThinkTank/` 目录，卸载即清
 
 ## 下载安装
 
@@ -29,7 +29,7 @@
 
 > 安装包未做代码签名，Windows SmartScreen 可能提示"未知发布者"，选择"仍要运行"即可。
 > 可使用 Release 页附带的 `SHA256SUMS.txt` 校验安装包完整性：
-> `certutil -hashfile 智识库_0.1.0_x64-setup.exe SHA256`
+> `certutil -hashfile SimpleThinkTank_0.1.0_x64-setup.exe SHA256`
 
 ## 截图
 

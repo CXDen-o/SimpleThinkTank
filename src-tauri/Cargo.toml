@@ -1,5 +1,5 @@
 [package]
-name = "zhishiku"
+name = "simplethinktank"
 version = "0.1.0"
 description = "智识库 - 本地私有化 RAG 桌面应用"
 authors = ["CXDen-o"]
@@ -9,8 +9,12 @@ edition = "2021"
 rust-version = "1.80"
 
 [lib]
-name = "zhishiku_lib"
+name = "simplethinktank_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "SimpleThinkTank"
+path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }

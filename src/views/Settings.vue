@@ -83,7 +83,7 @@
             <el-form-item label="自定义模型目录">
               <el-switch v-model="systemStore.settings.use_custom_models_dir" />
               <span class="hint-text">
-                开启后模型存放于 ~/Documents/Zhishiku/models/
+                开启后模型存放于 ~/Documents/SimpleThinkTank/models/
               </span>
             </el-form-item>
             <el-form-item label="下载重试次数">

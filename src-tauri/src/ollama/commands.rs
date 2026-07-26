@@ -478,7 +478,7 @@ pub struct ModelsOnDisk {
 pub async fn check_models_on_disk() -> Result<ModelsOnDisk, AppError> {
     use std::path::Path;
 
-    /// 候选 models 目录:默认 ~/.ollama/models,自定义 ~/Documents/Zhishiku/models
+    /// 候选 models 目录:默认 ~/.ollama/models,自定义 ~/Documents/SimpleThinkTank/models
     fn candidate_dirs() -> Vec<std::path::PathBuf> {
         let mut dirs = Vec::new();
         if let Some(home) = dirs::home_dir() {
