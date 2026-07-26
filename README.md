@@ -1,8 +1,8 @@
 # 智识库 SimpleThinkTank
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/github/v/release/CXDeno/SimpleThinkTank)](https://github.com/CXDeno/SimpleThinkTank/releases)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://github.com/CXDeno/SimpleThinkTank/releases)
+[![GitHub release](https://img.shields.io/github/v/release/CXDen-o/SimpleThinkTank)](https://github.com/CXDen-o/SimpleThinkTank/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://github.com/CXDen-o/SimpleThinkTank/releases)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8D8)](https://tauri.app)
 
 本地私有化 RAG 知识库桌面应用：基于 Ollama 本地大模型与 SQLite 向量检索，文档与对话数据完全保存在本机，不经过任何云端服务。
@@ -21,7 +21,7 @@
 
 ## 下载安装
 
-从 [Releases](https://github.com/CXDeno/SimpleThinkTank/releases) 下载最新的 `*_x64-setup.exe`（Windows 10/11 64 位）：
+从 [Releases](https://github.com/CXDen-o/SimpleThinkTank/releases) 下载最新的 `*_x64-setup.exe`（Windows 10/11 64 位）：
 
 1. 双击运行安装包
 2. 首次启动自动检测 Ollama；未安装时按引导一键静默安装

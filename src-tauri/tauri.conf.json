@@ -28,8 +28,8 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "publisher": "CXDeno",
-    "copyright": "Copyright © 2026 CXDeno",
+    "publisher": "CXDen-o",
+    "copyright": "Copyright © 2026 CXDen-o",
     "shortDescription": "本地私有化 RAG 知识库",
     "windows": {
       "nsis": {

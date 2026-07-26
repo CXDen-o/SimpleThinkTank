@@ -35,7 +35,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "智识库 v__VERSION__"
-          releaseBody: "更新内容见 [CHANGELOG](https://github.com/CXDeno/SimpleThinkTank/blob/main/CHANGELOG.md)。首次安装请阅读 [README](https://github.com/CXDeno/SimpleThinkTank#下载安装)。"
+          releaseBody: "更新内容见 [CHANGELOG](https://github.com/CXDen-o/SimpleThinkTank/blob/main/CHANGELOG.md)。首次安装请阅读 [README](https://github.com/CXDen-o/SimpleThinkTank#下载安装)。"
           releaseDraft: true
           prerelease: false
 

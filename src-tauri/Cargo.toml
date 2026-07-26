@@ -2,9 +2,9 @@
 name = "zhishiku"
 version = "0.1.0"
 description = "智识库 - 本地私有化 RAG 桌面应用"
-authors = ["CXDeno"]
+authors = ["CXDen-o"]
 license = "MIT"
-repository = "https://github.com/CXDeno/SimpleThinkTank"
+repository = "https://github.com/CXDen-o/SimpleThinkTank"
 edition = "2021"
 rust-version = "1.80"
 

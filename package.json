@@ -3,11 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "description": "智识库 - 本地私有化 RAG 桌面应用",
-  "author": "CXDeno",
+  "author": "CXDen-o",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CXDeno/SimpleThinkTank"
+    "url": "https://github.com/CXDen-o/SimpleThinkTank"
   },
   "type": "module",
   "scripts": {
