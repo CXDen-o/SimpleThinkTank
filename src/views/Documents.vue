@@ -25,6 +25,7 @@
       <el-progress
         :percentage="Math.round(docStore.displayPercent)"
         :status="docStore.importProgress && docStore.importProgress.failed > 0 ? 'warning' : undefined"
+        class="progress-flex"
       />
       <span class="progress-text" v-if="docStore.importProgress">
         正在处理: {{ docStore.importProgress.current_file || '准备中...' }}
@@ -33,6 +34,9 @@
       <span class="progress-text" v-else>
         准备导入...
       </span>
+      <el-button size="small" type="danger" text @click="docStore.cancelImport()">
+        取消
+      </el-button>
     </div>
 
     <!-- 文档列表 -->
@@ -88,6 +92,16 @@
             >
               <el-button text :icon="WarningFilled" type="danger" />
             </el-tooltip>
+            <el-popconfirm
+              title="删除该文档及其索引数据?"
+              confirm-button-text="删除"
+              cancel-button-text="取消"
+              @confirm="docStore.deleteDocument(kbId, row.id)"
+            >
+              <template #reference>
+                <el-button text :icon="Delete" type="danger" />
+              </template>
+            </el-popconfirm>
           </template>
         </el-table-column>
       </el-table>
@@ -105,6 +119,7 @@ import {
   Document,
   WarningFilled,
   FolderOpened,
+  Delete,
 } from "@element-plus/icons-vue";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -221,9 +236,16 @@ async function triggerUploadFolder() {
 }
 
 .progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 12px 28px;
   background: var(--el-color-warning-light-9);
   border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.progress-flex {
+  flex: 1;
 }
 
 .progress-bar :deep(.el-progress-bar__outer),

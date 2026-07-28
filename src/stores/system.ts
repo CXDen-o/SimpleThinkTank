@@ -11,12 +11,14 @@ import {
   type TestSourceRequest,
   type TestSourceResult,
   type ModelsOnDisk,
+  type RecommendedChatModel,
   type StorageStats,
 } from "@/api/invoke";
 import { ElMessage, ElNotification } from "element-plus";
 
-/** 默认模型名(与后端 DEFAULT_* 常量保持一致) */
-const DEFAULT_MODELS = ["qwen3:1.7b", "nomic-embed-text"];
+/** 默认对话/嵌入模型名(与后端 DEFAULT_* 常量保持一致;对话模型可被 settings.chat_model 覆盖) */
+export const DEFAULT_CHAT_MODEL = "qwen3:1.7b";
+export const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
 
 function defaultSettings(): AppSettings {
   return {
@@ -28,6 +30,7 @@ function defaultSettings(): AppSettings {
     download_connect_timeout_secs: 30,
     download_request_timeout_secs: 600,
     query_options: '{"top_k":4,"temperature":0.7,"max_tokens":1024,"use_history":true}',
+    chat_model: "",
   };
 }
 
@@ -63,6 +66,23 @@ export const useSystemStore = defineStore("system", () => {
 
   /** 文件系统层模型存在性(每次启动时刷新,不依赖 Ollama 运行) */
   const modelsOnDisk = ref<ModelsOnDisk | null>(null);
+
+  /** 推荐对话模型候选表(静态配置,启动时加载一次) */
+  const recommendedModels = ref<RecommendedChatModel[]>([]);
+
+  /** 当前生效的对话模型名(settings.chat_model 空串时回退默认) */
+  const effectiveChatModel = computed(
+    () => settings.value.chat_model || DEFAULT_CHAT_MODEL
+  );
+
+  /** 加载推荐对话模型候选表 */
+  async function loadRecommendedModels() {
+    try {
+      recommendedModels.value = await api.getRecommendedChatModels();
+    } catch (e) {
+      console.error("加载推荐模型列表失败", e);
+    }
+  }
 
   /** 检查系统状态 */
   async function checkSystem() {
@@ -128,11 +148,14 @@ export const useSystemStore = defineStore("system", () => {
 
     try {
       await api.downloadDefaultModels();
-      const allOk = DEFAULT_MODELS.every(
-        (m) => progressMap.value[m]?.status === "success"
+      const expected = [effectiveChatModel.value, DEFAULT_EMBEDDING_MODEL];
+      const allOk = expected.every(
+        (m) =>
+          progressMap.value[m]?.status === "success" ||
+          progressMap.value[m]?.status === "installed"
       );
       if (allOk) {
-        ElMessage.success("默认模型全部下载完成");
+        ElMessage.success("模型全部就绪");
       }
       await checkSystem();
       await checkModelsOnDisk();
@@ -285,6 +308,8 @@ export const useSystemStore = defineStore("system", () => {
     testingSource,
     lastTestResult,
     modelsOnDisk,
+    recommendedModels,
+    effectiveChatModel,
     storageStats,
     storageStatsLoading,
     clearingLogs,
@@ -299,6 +324,7 @@ export const useSystemStore = defineStore("system", () => {
     saveSettings,
     testSource,
     checkModelsOnDisk,
+    loadRecommendedModels,
     fetchStorageStats,
     clearLogs,
     ensureReady,

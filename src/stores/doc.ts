@@ -11,6 +11,8 @@ export const useDocStore = defineStore("doc", () => {
   const loading = ref(false);
   const importing = ref(false);
   const importProgress = ref<ImportProgress | null>(null);
+  /** 当前导入任务 id(用于取消) */
+  const currentTaskId = ref<string | null>(null);
   /** 进度条显示百分比(插值动画) */
   const displayPercent = ref(0);
   let animTimer: ReturnType<typeof setInterval> | null = null;
@@ -89,13 +91,20 @@ export const useDocStore = defineStore("doc", () => {
           ? Math.min(99, ((p.completed + p.failed + 1) / p.total) * 100)
           : 0;
         ensureAnimTimer();
-        if (p.status === "completed") {
-          // 完成时 realPercent 已是 100,tick 快速收尾;等待动画完成后再更新状态
+        if (p.status === "completed" || p.status === "cancelled") {
+          // 完成/取消时 realPercent 已到终值,tick 快速收尾;等待动画完成后再更新状态
           setTimeout(() => {
             importing.value = false;
-            ElMessage.success(
-              `导入完成: 成功 ${p.completed} 个, 失败 ${p.failed} 个`
-            );
+            currentTaskId.value = null;
+            if (p.status === "cancelled") {
+              ElMessage.warning(
+                `导入已取消: 已完成 ${p.completed} 个, 失败 ${p.failed} 个, 剩余未导入`
+              );
+            } else {
+              ElMessage.success(
+                `导入完成: 成功 ${p.completed} 个, 失败 ${p.failed} 个`
+              );
+            }
             // 刷新文档列表
             loadDocuments(kbId);
             if (unlistenProgress) {
@@ -113,10 +122,32 @@ export const useDocStore = defineStore("doc", () => {
         knowledge_base_id: kbId,
         file_paths: filePaths,
       });
+      currentTaskId.value = taskId;
       ElMessage.info(`开始导入 ${filePaths.length} 个文档（任务 ${taskId}）`);
     } catch (e) {
       importing.value = false;
       ElMessage.error(`导入失败: ${e}`);
+    }
+  }
+
+  /** 取消当前导入任务 */
+  async function cancelImport() {
+    if (!currentTaskId.value) return;
+    try {
+      await api.cancelImport(currentTaskId.value);
+    } catch (e) {
+      ElMessage.error(`取消失败: ${e}`);
+    }
+  }
+
+  /** 删除文档(连带清理 chunks 和向量) */
+  async function deleteDocument(kbId: string, docId: string) {
+    try {
+      await api.deleteDocument(docId);
+      ElMessage.success("文档已删除");
+      await loadDocuments(kbId);
+    } catch (e) {
+      ElMessage.error(`删除失败: ${e}`);
     }
   }
 
@@ -163,8 +194,11 @@ export const useDocStore = defineStore("doc", () => {
     importing,
     importProgress,
     displayPercent,
+    currentTaskId,
     loadDocuments,
     importDocuments,
+    cancelImport,
+    deleteDocument,
     formatSize,
     statusType,
     statusText,

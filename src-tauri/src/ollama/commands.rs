@@ -2,7 +2,7 @@
 
 use super::client::{DownloadRateTracker, OllamaClientConfig};
 use super::process::OllamaManager;
-use super::{DEFAULT_CHAT_MODEL, DEFAULT_EMBEDDING_MODEL};
+use super::{DEFAULT_EMBEDDING_MODEL};
 use crate::config::settings::AppSettings;
 use crate::config::SettingsState;
 use crate::error::AppError;
@@ -276,7 +276,9 @@ pub async fn download_default_models(
     let settings = manager.settings_snapshot();
     let max_attempts = settings.download_max_retries.max(1);
 
-    let models = [DEFAULT_CHAT_MODEL, DEFAULT_EMBEDDING_MODEL];
+    // 对话模型取 settings 中的生效值(用户可在设置中切换候选模型)
+    let chat_model = super::effective_chat_model(&settings);
+    let models = [chat_model.as_str(), DEFAULT_EMBEDDING_MODEL];
     let mut handles = Vec::new();
 
     for model in models {
@@ -445,37 +447,67 @@ pub async fn shutdown_cleanup(
 /// /api/tags 不返回模型能力信息,只能按名称特征排除常见嵌入模型。
 #[tauri::command]
 pub async fn list_local_models(state: State<'_, OllamaState>) -> Result<Vec<String>, AppError> {
-    /// 名称特征判断是否为嵌入模型(不支持 generate)
-    fn is_embedding_model(name: &str) -> bool {
-        let n = name.to_lowercase();
-        n.contains("embed") || n.starts_with("bge") || n.contains("minilm") || n.starts_with("e5")
-    }
-
     let manager = state.get().await;
     if !manager.is_running().await {
         return Ok(vec![]);
     }
     let models = manager.client_clone().list_models().await?;
-    Ok(models.into_iter().filter(|m| !is_embedding_model(m)).collect())
+    Ok(models
+        .into_iter()
+        .filter(|m| !is_embedding_model_name(m))
+        .collect())
 }
 
-/// 模型存在性检查结果(按模型名)
+/// 模型存在性检查结果
 #[derive(serde::Serialize)]
 pub struct ModelsOnDisk {
-    pub qwen3_1_7b: bool,
-    pub nomic_embed_text: bool,
+    /// 当前生效的对话模型名(settings.chat_model 或默认)
+    pub chat_model: String,
+    /// 生效对话模型是否已在磁盘
+    pub chat_model_installed: bool,
+    /// 嵌入模型(锁定)是否已在磁盘
+    pub embedding_model_installed: bool,
     pub all_installed: bool,
+    /// 文件系统层发现的全部对话模型(已按名称特征过滤嵌入模型)
+    pub local_chat_models: Vec<String>,
     /// 被扫描的候选目录
     pub scanned_dirs: Vec<String>,
 }
 
-/// 在文件系统层检查默认模型是否已下载(不依赖 Ollama 服务运行)
+/// 获取推荐对话模型候选表(静态配置)
+#[tauri::command]
+pub fn get_recommended_chat_models() -> Vec<super::RecommendedChatModel> {
+    super::RECOMMENDED_CHAT_MODELS.to_vec()
+}
+
+/// 名称特征判断是否为嵌入模型(不支持 generate)
+fn is_embedding_model_name(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.contains("embed") || n.starts_with("bge") || n.contains("minilm") || n.starts_with("e5")
+}
+
+/// 归一化模型引用:无 tag 时补 ":latest"
+/// (Ollama 对 `ollama pull nomic-embed-text` 存储的 manifest tag 为 latest,
+/// 与 has_model 的容错比较语义保持一致)
+fn normalize_model_ref(model: &str) -> String {
+    if model.contains(':') {
+        model.to_string()
+    } else {
+        format!("{}:latest", model)
+    }
+}
+
+/// 在文件系统层检查模型下载状态(不依赖 Ollama 服务运行)
 ///
 /// Ollama 模型存储结构:
 ///   `<models_dir>/manifests/<registry>/<namespace>/<name>/<tag>`
-/// 本函数递归扫描 manifests 目录,匹配 model_name 对应的 manifest 文件。
+/// 本函数扫描 manifests 目录:
+///   - 判断生效对话模型/嵌入模型是否存在
+///   - 收集全部已下载的对话模型名(供设置页候选)
 #[tauri::command]
-pub async fn check_models_on_disk() -> Result<ModelsOnDisk, AppError> {
+pub async fn check_models_on_disk(
+    settings: State<'_, SettingsState>,
+) -> Result<ModelsOnDisk, AppError> {
     use std::path::Path;
 
     /// 候选 models 目录:默认 ~/.ollama/models,自定义 ~/Documents/SimpleThinkTank/models
@@ -488,56 +520,101 @@ pub async fn check_models_on_disk() -> Result<ModelsOnDisk, AppError> {
         dirs
     }
 
-    /// 在 manifests 目录递归查找 `<name>/<tag>` 文件
-    fn find_manifest(dir: &Path, name: &str, tag: &str) -> bool {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return false;
+    /// 扫描 manifests 收集全部模型名(name:tag)
+    /// 结构固定为 4 层: manifests/<registry>/<namespace>/<name>/<tag>
+    fn collect_models(manifests: &Path, out: &mut Vec<String>) {
+        let Ok(registries) = std::fs::read_dir(manifests) else {
+            return;
         };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                // 当前目录名匹配 name 时,检查同级是否有 <tag> 文件
-                if path.file_name().and_then(|n| n.to_str()) == Some(name) {
-                    let tag_file = path.join(tag);
-                    if tag_file.is_file() {
-                        return true;
+        for reg in registries.flatten() {
+            let Ok(namespaces) = std::fs::read_dir(reg.path()) else {
+                continue;
+            };
+            for ns in namespaces.flatten() {
+                let Ok(names) = std::fs::read_dir(ns.path()) else {
+                    continue;
+                };
+                for name_ent in names.flatten() {
+                    let name = name_ent.file_name();
+                    let Some(name) = name.to_str() else { continue };
+                    let Ok(tags) = std::fs::read_dir(name_ent.path()) else {
+                        continue;
+                    };
+                    for tag_ent in tags.flatten() {
+                        if tag_ent.path().is_file() {
+                            if let Some(tag) = tag_ent.file_name().to_str() {
+                                out.push(format!("{}:{}", name, tag));
+                            }
+                        }
                     }
                 }
-                // 否则继续递归
-                if find_manifest(&path, name, tag) {
-                    return true;
-                }
             }
         }
-        false
     }
 
-    /// 检查单个模型在任一候选目录是否存在
-    fn model_exists(model_name: &str) -> bool {
-        let (name, tag) = match model_name.split_once(':') {
-            Some((n, t)) => (n, t),
-            None => (model_name, "latest"),
-        };
-        for dir in candidate_dirs() {
-            let manifests = dir.join("manifests");
-            if manifests.is_dir() && find_manifest(&manifests, name, tag) {
-                return true;
-            }
-        }
-        false
-    }
-
-    let scanned_dirs = candidate_dirs()
-        .into_iter()
+    let dirs = candidate_dirs();
+    let scanned_dirs: Vec<String> = dirs
+        .iter()
         .filter_map(|d| d.to_str().map(|s| s.to_string()))
         .collect();
 
-    let qwen = model_exists(super::DEFAULT_CHAT_MODEL);
-    let nomic = model_exists(super::DEFAULT_EMBEDDING_MODEL);
+    // 汇总所有候选目录下的模型(去重)
+    let mut all_models: Vec<String> = Vec::new();
+    for dir in &dirs {
+        let manifests = dir.join("manifests");
+        if manifests.is_dir() {
+            collect_models(&manifests, &mut all_models);
+        }
+    }
+    all_models.sort();
+    all_models.dedup();
+
+    let settings = settings.get().await;
+    let chat_model = super::effective_chat_model(&settings);
+    let chat_ref = normalize_model_ref(&chat_model);
+    let emb_ref = normalize_model_ref(super::DEFAULT_EMBEDDING_MODEL);
+    let chat_installed = all_models.iter().any(|m| m == &chat_ref);
+    let emb_installed = all_models.iter().any(|m| m == &emb_ref);
+    let local_chat_models: Vec<String> = all_models
+        .into_iter()
+        .filter(|m| !is_embedding_model_name(m))
+        .collect();
+
     Ok(ModelsOnDisk {
-        qwen3_1_7b: qwen,
-        nomic_embed_text: nomic,
-        all_installed: qwen && nomic,
+        chat_model,
+        chat_model_installed: chat_installed,
+        embedding_model_installed: emb_installed,
+        all_installed: chat_installed && emb_installed,
+        local_chat_models,
         scanned_dirs,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_model_ref() {
+        // 无 tag 补 latest
+        assert_eq!(normalize_model_ref("nomic-embed-text"), "nomic-embed-text:latest");
+        // 已有 tag 保持不变
+        assert_eq!(normalize_model_ref("qwen3:1.7b"), "qwen3:1.7b");
+        assert_eq!(normalize_model_ref("nomic-embed-text:latest"), "nomic-embed-text:latest");
+    }
+
+    #[test]
+    fn test_embedding_model_match_with_implicit_latest() {
+        // 回归:ollama pull nomic-embed-text 落盘的 manifest 为 nomic-embed-text:latest,
+        // 精确比较会漏判为未安装
+        let scanned = vec!["qwen3:1.7b".to_string(), "nomic-embed-text:latest".to_string()];
+        let emb_ref = normalize_model_ref(super::DEFAULT_EMBEDDING_MODEL);
+        assert!(scanned.iter().any(|m| m == &emb_ref));
+        // 嵌入模型不得进入对话模型候选
+        let chat_candidates: Vec<&String> = scanned
+            .iter()
+            .filter(|m| !is_embedding_model_name(m))
+            .collect();
+        assert_eq!(chat_candidates, vec!["qwen3:1.7b"]);
+    }
 }

@@ -28,6 +28,13 @@ struct ProcessOwnership {
     started_at: Option<Instant>,
 }
 
+/// Windows 创建子进程标志:不创建可见控制台窗口(GUI 应用启动控制台程序时避免弹 cmd 窗口)
+/// 注意:CREATE_NO_WINDOW 与 DETACHED_PROCESS 互斥,不可同用(MSDN)
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(windows)]
+const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+
 static OWNERSHIP: Mutex<Option<ProcessOwnership>> = Mutex::new(None);
 
 /// Ollama 进程管理器
@@ -68,11 +75,12 @@ impl OllamaManager {
         self.client.is_alive().await
     }
 
-    /// 检测默认模型是否已安装
+    /// 检测默认模型是否已安装(对话模型取 settings 中的生效值)
     pub async fn default_models_available(&self) -> bool {
+        let chat_model = super::effective_chat_model(&self.settings);
         let chat = self
             .client
-            .has_model(super::DEFAULT_CHAT_MODEL)
+            .has_model(&chat_model)
             .await
             .unwrap_or(false);
         let emb = self
@@ -167,9 +175,8 @@ impl OllamaManager {
         }
         #[cfg(windows)]
         {
-            const DETACHED_PROCESS: u32 = 0x00000008;
-            const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
-            cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+            // 隐藏 serve 进程的控制台窗口;DETACHED_PROCESS 实测仍弹窗,换 CREATE_NO_WINDOW
+            cmd.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
         }
 
         let _child = cmd.spawn().map_err(|e| {
@@ -238,10 +245,11 @@ impl OllamaManager {
         let mut steps = Vec::new();
 
         if self.is_running().await {
-            if let Err(e) = self.client.unload_model(super::DEFAULT_CHAT_MODEL).await {
+            let chat_model = super::effective_chat_model(&self.settings);
+            if let Err(e) = self.client.unload_model(&chat_model).await {
                 tracing::warn!("卸载对话模型失败: {}", e);
             } else {
-                steps.push(format!("已卸载模型: {}", super::DEFAULT_CHAT_MODEL));
+                steps.push(format!("已卸载模型: {}", chat_model));
             }
             if let Err(e) = self
                 .client
@@ -321,17 +329,20 @@ fn default_install_paths() -> Vec<PathBuf> {
 /// 通过 winget 静默安装 Ollama(同步等待安装完成)
 #[cfg(target_os = "windows")]
 async fn install_via_winget() -> AppResult<()> {
-    let output = tokio::process::Command::new("winget")
-        .args([
-            "install",
-            "-e",
-            "--id",
-            "Ollama.Ollama",
-            "--silent",
-            "--accept-package-agreements",
-            "--accept-source-agreements",
-            "--disable-interactivity",
-        ])
+    let mut cmd = tokio::process::Command::new("winget");
+    cmd.args([
+        "install",
+        "-e",
+        "--id",
+        "Ollama.Ollama",
+        "--silent",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+        "--disable-interactivity",
+    ]);
+    // winget 是控制台程序,GUI 进程直接拉起会弹 cmd 窗口
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let output = cmd
         .output()
         .await
         .map_err(|e| AppError::Other(anyhow::anyhow!("winget 不可用: {}", e)))?;
@@ -419,9 +430,11 @@ async fn wait_install_detected() -> AppResult<()> {
 async fn stop_ollama_process() -> AppResult<()> {
     #[cfg(windows)]
     {
-        tokio::process::Command::new("taskkill")
-            .args(["/IM", "ollama.exe", "/F"])
-            .output()
+        let mut cmd = tokio::process::Command::new("taskkill");
+        cmd.args(["/IM", "ollama.exe", "/F"]);
+        // taskkill 是控制台程序,退出清理时避免闪 cmd 窗口
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd.output()
             .await
             .map_err(|e| AppError::Other(anyhow::anyhow!("taskkill 失败: {}", e)))?;
         tokio::time::sleep(Duration::from_secs(1)).await;

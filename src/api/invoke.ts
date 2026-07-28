@@ -171,6 +171,8 @@ export interface AppSettings {
   download_connect_timeout_secs: number;
   download_request_timeout_secs: number;
   query_options: string;
+  /** 对话模型名,空串表示默认 qwen3:1.7b(嵌入模型全局锁定) */
+  chat_model: string;
 }
 
 /** 测试下载源请求 */
@@ -188,10 +190,23 @@ export interface TestSourceResult {
 
 /** 文件系统层模型存在性检查结果 */
 export interface ModelsOnDisk {
-  qwen3_1_7b: boolean;
-  nomic_embed_text: boolean;
+  /** 当前生效的对话模型名 */
+  chat_model: string;
+  /** 生效对话模型是否已在磁盘 */
+  chat_model_installed: boolean;
+  /** 嵌入模型(锁定)是否已在磁盘 */
+  embedding_model_installed: boolean;
   all_installed: boolean;
+  /** 文件系统层发现的全部对话模型(已过滤嵌入模型) */
+  local_chat_models: string[];
   scanned_dirs: string[];
+}
+
+/** 推荐对话模型条目(对应后端 RecommendedChatModel) */
+export interface RecommendedChatModel {
+  name: string;
+  tier_label: string;
+  size_hint: string;
 }
 
 /** 单个知识库的存储统计 */
@@ -252,6 +267,12 @@ export const api = {
   getImportTaskProgress: (taskId: string) =>
     invoke<ImportProgress | null>("get_import_task_progress", { taskId }),
 
+  /** 取消导入任务(当前文件处理完后停止) */
+  cancelImport: (taskId: string) => invoke<boolean>("cancel_import", { taskId }),
+
+  /** 删除文档(连带清理 chunks 和向量) */
+  deleteDocument: (docId: string) => invoke<void>("delete_document", { docId }),
+
   // 切分策略
   getSplitStrategies: () => invoke<StrategyInfo[]>("get_split_strategies"),
 
@@ -301,6 +322,10 @@ export const api = {
     invoke<TestSourceResult>("test_download_source", { req }),
 
   checkModelsOnDisk: () => invoke<ModelsOnDisk>("check_models_on_disk"),
+
+  /** 获取推荐对话模型候选表(静态配置) */
+  getRecommendedChatModels: () =>
+    invoke<RecommendedChatModel[]>("get_recommended_chat_models"),
 
   getStorageStats: () => invoke<StorageStats>("get_storage_stats"),
 

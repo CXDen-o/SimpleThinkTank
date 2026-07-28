@@ -107,6 +107,8 @@ pub fn run() {
             commands::documents::import_documents,
             commands::documents::get_documents,
             commands::documents::get_import_task_progress,
+            commands::documents::cancel_import,
+            commands::documents::delete_document,
             // 切分策略
             commands::chunking::get_split_strategies,
             commands::chunking::preview_split,
@@ -129,6 +131,7 @@ pub fn run() {
             ollama::commands::shutdown_cleanup,
             ollama::commands::check_models_on_disk,
             ollama::commands::list_local_models,
+            ollama::commands::get_recommended_chat_models,
             // 存储统计
             commands::stats::get_storage_stats,
             commands::stats::clear_logs,

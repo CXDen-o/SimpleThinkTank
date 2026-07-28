@@ -30,7 +30,7 @@ pub async fn preview_split(
         if manager.is_running().await {
             SplitContext::new(
                 manager.client_clone(),
-                crate::ollama::DEFAULT_CHAT_MODEL.to_string(),
+                crate::ollama::effective_chat_model(&manager.settings_snapshot()),
                 false, // 预览路径直接报错，让用户感知 Ollama 未运行
             )
         } else {

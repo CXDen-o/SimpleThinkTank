@@ -7,6 +7,7 @@
         <span>智识库</span>
       </div>
       <div class="actions">
+        <el-button :icon="Setting" text @click="openSettingsWindow">设置</el-button>
         <el-button type="primary" :icon="Plus" @click="openCreate">
           新建知识库
         </el-button>
@@ -164,10 +165,11 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed, watch } from "vue";
 import { useRouter } from "vue-router";
-import { Plus, Collection, MoreFilled, View } from "@element-plus/icons-vue";
+import { Plus, Collection, MoreFilled, View, Setting } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { useKbStore } from "@/stores/kb";
 import { api, type KnowledgeBase, type StrategyInfo, type ChunkResult } from "@/api/invoke";
+import { openSettingsWindow } from "@/utils/settingsWindow";
 
 const router = useRouter();
 const kbStore = useKbStore();

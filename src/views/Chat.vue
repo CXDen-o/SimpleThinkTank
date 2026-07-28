@@ -166,12 +166,12 @@ import {
   Loading,
 } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useKbStore } from "@/stores/kb";
 import { useChatStore } from "@/stores/chat";
-import { useSystemStore } from "@/stores/system";
+import { useSystemStore, DEFAULT_EMBEDDING_MODEL } from "@/stores/system";
 import { useStickToBottom } from "@/composables/useStickToBottom";
+import { openSettingsWindow } from "@/utils/settingsWindow";
 import { events, type QueryOptions } from "@/api/invoke";
 
 const props = defineProps<{ id: string }>();
@@ -190,34 +190,6 @@ const { stickToBottom, followIfStuck, scrollToBottom, jumpToLatest } =
   useStickToBottom(messagesRef);
 const firstLaunchChecked = ref(false);
 let unlistenQueryOpts: UnlistenFn | null = null;
-
-/** 打开独立设置窗口 */
-async function openSettingsWindow() {
-  const label = "settings";
-  // 若已存在则聚焦
-  const existing = await WebviewWindow.getByLabel(label);
-  if (existing) {
-    await existing.setFocus();
-    return;
-  }
-  const win = new WebviewWindow(label, {
-    url: "/settings",
-    title: "参数设置",
-    width: 560,
-    height: 640,
-    resizable: true,
-    minimizable: false,
-    maximizable: false,
-    center: true,
-  });
-  win.once("tauri://created", async () => {
-    try {
-      await win.center();
-    } catch {
-      // ignore
-    }
-  });
-}
 
 /** 初始化 */
 async function init() {
@@ -245,14 +217,28 @@ async function init() {
     chatStore.queryOptions = { ...opts };
   });
 
-  // 首次启动:模型未下载时,自动打开设置窗口引导配置
+  // 首次启动:生效模型未就绪时,自动打开设置窗口引导配置
   if (
     !firstLaunchChecked.value &&
     !systemStore.modelsOnDisk?.all_installed
   ) {
     firstLaunchChecked.value = true;
     openSettingsWindow();
-    ElMessage.info("检测到默认模型未下载,请先在设置窗口中配置下载源后点击下载");
+    const locals = systemStore.modelsOnDisk?.local_chat_models ?? [];
+    const embeddingReady =
+      systemStore.modelsOnDisk?.embedding_model_installed === true;
+    if (locals.length > 0 && embeddingReady) {
+      // 本地已有对话模型且嵌入模型就绪:提示可免下载直接选用
+      ElMessage.info(
+        `检测到本机已有对话模型(${locals.join("、")}),可在设置窗口「对话模型」页直接选用,无需下载`
+      );
+    } else if (locals.length > 0) {
+      ElMessage.info(
+        `检测到本机已有对话模型(${locals.join("、")}),可在设置窗口选用;另需下载嵌入模型 ${DEFAULT_EMBEDDING_MODEL}`
+      );
+    } else {
+      ElMessage.info("检测到模型未下载,请先在设置窗口中配置下载源后点击下载");
+    }
   }
 }
 

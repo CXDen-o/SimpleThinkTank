@@ -14,13 +14,20 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, State};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 /// 导入任务的最大文件大小（100MB）
 const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024;
 
-/// 全局导入任务进度（简化实现，阶段二可改用 Tauri State）
-static IMPORT_TASKS: std::sync::LazyLock<Mutex<HashMap<String, ImportProgress>>> =
+/// 导入任务句柄:进度 + 取消令牌
+struct ImportTask {
+    progress: ImportProgress,
+    cancel: CancellationToken,
+}
+
+/// 全局导入任务表
+static IMPORT_TASKS: std::sync::LazyLock<Mutex<HashMap<String, ImportTask>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// 支持的文档扩展名
@@ -79,22 +86,30 @@ pub async fn import_documents(
         )));
     }
 
-    // 初始化进度
-    let progress = ImportProgress {
-        task_id: task_id.clone(),
-        total,
-        completed: 0,
-        failed: 0,
-        current_file: None,
-        status: "running".to_string(),
-    };
-    IMPORT_TASKS.lock().unwrap().insert(task_id.clone(), progress);
+    // 初始化进度 + 取消令牌
+    let cancel = CancellationToken::new();
+    IMPORT_TASKS.lock().unwrap().insert(
+        task_id.clone(),
+        ImportTask {
+            progress: ImportProgress {
+                task_id: task_id.clone(),
+                total,
+                completed: 0,
+                failed: 0,
+                current_file: None,
+                status: "running".to_string(),
+            },
+            cancel: cancel.clone(),
+        },
+    );
 
     let kb_id = req.knowledge_base_id.clone();
     let pool = db.0.clone();
     let task_id_clone = task_id.clone();
     let app_clone = app.clone();
     let ollama_manager = ollama_state.get().await;
+    // 生效对话模型(切分策略中的 LLM 步骤使用;嵌入模型全局锁定)
+    let chat_model = crate::ollama::effective_chat_model(&ollama_manager.settings_snapshot());
 
     // 读取知识库切分策略
     let kb: KnowledgeBase =
@@ -111,7 +126,15 @@ pub async fn import_documents(
 
     // 后台异步处理
     tokio::spawn(async move {
+        let mut cancelled = false;
         for file_path in file_paths {
+            // 取消检查点:每个文件开始前响应取消
+            if cancel.is_cancelled() {
+                cancelled = true;
+                tracing::info!("导入任务 {} 已被用户取消", task_id_clone);
+                break;
+            }
+
             let path = PathBuf::from(&file_path);
             let file_name = path
                 .file_name()
@@ -122,12 +145,17 @@ pub async fn import_documents(
             // 更新当前文件并推送进度(让前端显示"正在处理: xxx")
             {
                 let mut tasks = IMPORT_TASKS.lock().unwrap();
-                if let Some(p) = tasks.get_mut(&task_id_clone) {
-                    p.current_file = Some(file_name.clone());
+                if let Some(t) = tasks.get_mut(&task_id_clone) {
+                    t.progress.current_file = Some(file_name.clone());
                 }
             }
             // 推送"开始处理"进度事件
-            if let Some(p) = IMPORT_TASKS.lock().unwrap().get(&task_id_clone).cloned() {
+            if let Some(p) = IMPORT_TASKS
+                .lock()
+                .unwrap()
+                .get(&task_id_clone)
+                .map(|t| t.progress.clone())
+            {
                 let _ = app_clone.emit("import-progress", &p);
             }
 
@@ -144,13 +172,14 @@ pub async fn import_documents(
                 &split_config,
                 ollama_ready,
                 client,
+                &chat_model,
             )
             .await;
 
             // 更新进度
-            let (_completed, _failed) = {
+            {
                 let mut tasks = IMPORT_TASKS.lock().unwrap();
-                let p = tasks.get_mut(&task_id_clone).unwrap();
+                let p = &mut tasks.get_mut(&task_id_clone).unwrap().progress;
                 match &result {
                     Ok(_) => p.completed += 1,
                     Err(e) => {
@@ -158,27 +187,30 @@ pub async fn import_documents(
                         tracing::error!("文档导入失败 {}: {}", file_name, e);
                     }
                 }
-                (p.completed, p.failed)
-            };
+            }
 
             // 推送进度事件到前端
             let current_progress = IMPORT_TASKS
                 .lock()
                 .unwrap()
                 .get(&task_id_clone)
-                .cloned();
+                .map(|t| t.progress.clone());
             if let Some(p) = current_progress {
                 let _ = app_clone.emit("import-progress", &p);
             }
         }
 
-        // 标记完成
+        // 标记完成/取消
         let mut tasks = IMPORT_TASKS.lock().unwrap();
-        if let Some(p) = tasks.get_mut(&task_id_clone) {
-            p.status = "completed".to_string();
-            p.current_file = None;
+        if let Some(t) = tasks.get_mut(&task_id_clone) {
+            t.progress.status = if cancelled {
+                "cancelled".to_string()
+            } else {
+                "completed".to_string()
+            };
+            t.progress.current_file = None;
         }
-        let final_progress = tasks.get(&task_id_clone).cloned();
+        let final_progress = tasks.get(&task_id_clone).map(|t| t.progress.clone());
         drop(tasks);
 
         if let Some(p) = final_progress {
@@ -198,6 +230,7 @@ async fn process_single_document(
     split_config: &serde_json::Value,
     ollama_ready: bool,
     ollama_client: crate::ollama::OllamaClient,
+    chat_model: &str,
 ) -> AppResult<()> {
     let file_name = path
         .file_name()
@@ -282,7 +315,12 @@ async fn process_single_document(
                     .execute(pool)
                     .await?;
 
-                let pipeline = RagPipeline::new(pool.clone(), ollama_client);
+                let pipeline = RagPipeline::with_models(
+                    pool.clone(),
+                    ollama_client,
+                    chat_model.to_string(),
+                    crate::ollama::DEFAULT_EMBEDDING_MODEL.to_string(),
+                );
                 match pipeline
                     .index_document(kb_id, &doc_id, &text, split_strategy, split_config)
                     .await
@@ -345,6 +383,44 @@ pub async fn get_documents(
 pub async fn get_import_task_progress(
     task_id: String,
 ) -> Result<Option<ImportProgress>, AppError> {
-    let progress = IMPORT_TASKS.lock().unwrap().get(&task_id).cloned();
+    let progress = IMPORT_TASKS
+        .lock()
+        .unwrap()
+        .get(&task_id)
+        .map(|t| t.progress.clone());
     Ok(progress)
+}
+
+/// 取消导入任务(当前文件处理完后停止,已完成的文档保留)
+#[tauri::command]
+pub async fn cancel_import(task_id: String) -> Result<bool, AppError> {
+    let tasks = IMPORT_TASKS.lock().unwrap();
+    if let Some(t) = tasks.get(&task_id) {
+        t.cancel.cancel();
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// 删除文档:连带清理 chunks 和向量(单事务,释放空间并允许同文件重新导入)
+#[tauri::command]
+pub async fn delete_document(db: State<'_, DbState>, doc_id: String) -> Result<(), AppError> {
+    let mut tx = db.0.begin().await?;
+    sqlx::query(
+        "DELETE FROM vec_chunks WHERE chunk_id IN (SELECT id FROM chunks WHERE document_id = ?)",
+    )
+    .bind(&doc_id)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("DELETE FROM chunks WHERE document_id = ?")
+        .bind(&doc_id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM documents WHERE id = ?")
+        .bind(&doc_id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(())
 }

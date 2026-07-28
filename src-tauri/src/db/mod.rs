@@ -53,6 +53,32 @@ pub async fn init_database(db_url: &str) -> Result<Db, sqlx::Error> {
     // 运行内嵌迁移
     sqlx::migrate!("./migrations").run(&pool).await?;
 
+    // 启动恢复:上次退出时处于中间态(parsing/vectorizing/chunking)的文档,
+    // 其 chunks/向量可能只写了一半,先清理半成品数据再标记 failed,
+    // 避免检索命中残缺片段;用户可删除后重新导入
+    sqlx::query(
+        "DELETE FROM vec_chunks WHERE chunk_id IN (\
+             SELECT id FROM chunks WHERE document_id IN (\
+                 SELECT id FROM documents WHERE status IN ('parsing','vectorizing','chunking')))",
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "DELETE FROM chunks WHERE document_id IN (\
+             SELECT id FROM documents WHERE status IN ('parsing','vectorizing','chunking'))",
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "UPDATE documents SET status = 'failed', \
+         error_message = '导入被中断(应用退出),请删除后重新导入', \
+         updated_at = ? \
+         WHERE status IN ('parsing','vectorizing','chunking')",
+    )
+    .bind(chrono::Utc::now().to_rfc3339())
+    .execute(&pool)
+    .await?;
+
     Ok(pool)
 }
 

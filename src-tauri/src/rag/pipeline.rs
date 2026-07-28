@@ -4,7 +4,7 @@
 use crate::chunking::{get_strategy, SplitStrategyId};
 use crate::db::Db;
 use crate::error::AppResult;
-use crate::ollama::{OllamaClient, GenerateOptions, DEFAULT_CHAT_MODEL, DEFAULT_EMBEDDING_MODEL};
+use crate::ollama::{OllamaClient, GenerateOptions};
 use crate::vectorstore::{RetrievedChunk, SqliteVecStore, VectorStore, VectorRecord};
 use serde::{Deserialize, Serialize};
 
@@ -63,16 +63,7 @@ pub struct RagPipeline {
 }
 
 impl RagPipeline {
-    pub fn new(db: Db, ollama: OllamaClient) -> Self {
-        Self::with_models(
-            db,
-            ollama,
-            DEFAULT_CHAT_MODEL.to_string(),
-            DEFAULT_EMBEDDING_MODEL.to_string(),
-        )
-    }
-
-    /// 指定模型名构造(支持从 settings 注入)
+    /// 指定模型名构造(对话模型来自 settings,嵌入模型全局锁定)
     pub fn with_models(
         db: Db,
         ollama: OllamaClient,
@@ -109,15 +100,40 @@ impl RagPipeline {
         let chunks = strategy.split(text, split_config, &ctx).await?;
         let chunk_count = chunks.len();
 
-        // 2. 落库 chunks(若已存在先删除)
+        // 2. 批量向量化(网络调用,保持在数据库事务外,避免长事务占用写锁)
+        let texts: Vec<String> = chunks.iter().map(|c| c.text.clone()).collect();
+        let mut records: Vec<VectorRecord> = Vec::new();
+        if !texts.is_empty() {
+            let chunk_ids: Vec<String> = chunks
+                .iter()
+                .map(|_| uuid::Uuid::new_v4().to_string())
+                .collect();
+            // 分批处理避免单次请求过大
+            for (idx, batch) in texts.chunks(8).enumerate() {
+                let embeddings = self
+                    .ollama
+                    .embed_batch(&self.embedding_model, batch)
+                    .await?;
+                for (i, emb) in embeddings.into_iter().enumerate() {
+                    records.push(VectorRecord {
+                        chunk_id: chunk_ids[idx * 8 + i].clone(),
+                        knowledge_base_id: kb_id.to_string(),
+                        embedding: emb,
+                    });
+                }
+            }
+        }
+
+        // 3. 单事务落库:清旧 chunks → 写 chunks → 写向量 → 更新文档状态
+        // 任一步失败整体回滚,不留半成品数据
+        let mut tx = self.db.begin().await?;
+
         sqlx::query("DELETE FROM chunks WHERE document_id = ?")
             .bind(doc_id)
-            .execute(&self.db)
+            .execute(&mut *tx)
             .await?;
 
-        let mut chunk_ids: Vec<String> = Vec::with_capacity(chunk_count);
-        for c in &chunks {
-            let chunk_id = uuid::Uuid::new_v4().to_string();
+        for (i, c) in chunks.iter().enumerate() {
             let metadata = if c.metadata.is_null() {
                 "{}".to_string()
             } else {
@@ -126,48 +142,26 @@ impl RagPipeline {
             sqlx::query(
                 "INSERT INTO chunks (id, document_id, knowledge_base_id, content, chunk_index, metadata) VALUES (?, ?, ?, ?, ?, ?)",
             )
-            .bind(&chunk_id)
+            .bind(&records[i].chunk_id)
             .bind(doc_id)
             .bind(kb_id)
             .bind(&c.text)
             .bind(c.index as i64)
             .bind(&metadata)
-            .execute(&self.db)
+            .execute(&mut *tx)
             .await?;
-            chunk_ids.push(chunk_id);
         }
 
-        // 3. 批量向量化
-        let texts: Vec<String> = chunks.iter().map(|c| c.text.clone()).collect();
-        if !texts.is_empty() {
-            // 分批处理避免单次请求过大
-            for (idx, batch) in texts.chunks(8).enumerate() {
-                let embeddings = self
-                    .ollama
-                    .embed_batch(&self.embedding_model, batch)
-                    .await?;
-                let mut records = Vec::with_capacity(embeddings.len());
-                for (i, emb) in embeddings.into_iter().enumerate() {
-                    let global_idx = idx * 8 + i;
-                    let chunk_id = chunk_ids[global_idx].clone();
-                    records.push(VectorRecord {
-                        chunk_id,
-                        knowledge_base_id: kb_id.to_string(),
-                        embedding: emb,
-                    });
-                }
-                // 直接调用 async VectorStore
-                self.vector_store.add_vectors(records).await?;
-            }
-        }
+        self.vector_store.add_vectors_in(&mut tx, &records).await?;
 
-        // 4. 更新文档状态
         sqlx::query("UPDATE documents SET status = 'indexed', chunk_count = ?, updated_at = ? WHERE id = ?")
             .bind(chunk_count as i64)
             .bind(chrono::Utc::now().to_rfc3339())
             .bind(doc_id)
-            .execute(&self.db)
+            .execute(&mut *tx)
             .await?;
+
+        tx.commit().await?;
 
         Ok(chunk_count)
     }

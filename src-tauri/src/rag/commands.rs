@@ -38,6 +38,21 @@ pub struct SaveConversationRequest {
     pub messages: Vec<Message>,
 }
 
+/// 用 settings 中的生效模型构造 RAG 流水线(对话模型可切换,嵌入模型锁定)
+fn pipeline_with_settings(
+    pool: crate::db::Db,
+    client: crate::ollama::OllamaClient,
+    manager: &crate::ollama::process::OllamaManager,
+) -> RagPipeline {
+    let settings = manager.settings_snapshot();
+    RagPipeline::with_models(
+        pool,
+        client,
+        crate::ollama::effective_chat_model(&settings),
+        crate::ollama::DEFAULT_EMBEDDING_MODEL.to_string(),
+    )
+}
+
 /// 对知识库发起一次问答
 #[tauri::command]
 pub async fn query_knowledge_base(
@@ -52,7 +67,7 @@ pub async fn query_knowledge_base(
         return Err(crate::error::AppError::OllamaNotRunning);
     }
     let client = manager.client_clone();
-    let pipeline = RagPipeline::new(pool, client);
+    let pipeline = pipeline_with_settings(pool, client, &manager);
     let answer = pipeline
         .query(&req.kb_id, &req.question, &req.history, &req.options)
         .await?;
@@ -101,7 +116,7 @@ pub async fn query_knowledge_base_stream(
         return Err(crate::error::AppError::OllamaNotRunning);
     }
     let client = manager.client_clone();
-    let pipeline = RagPipeline::new(pool, client);
+    let pipeline = pipeline_with_settings(pool, client, &manager);
 
     let result = pipeline
         .query_stream(&req.kb_id, &req.question, &req.history, &req.options, |token| {

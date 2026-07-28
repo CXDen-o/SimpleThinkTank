@@ -47,6 +47,106 @@
           <el-skeleton v-else :rows="4" animated />
         </el-tab-pane>
 
+        <el-tab-pane label="对话模型" name="model">
+          <el-form label-width="110px" size="default">
+            <el-form-item label="对话模型">
+              <el-select v-model="selectedChatModel" style="width: 420px">
+                <el-option-group label="推荐模型">
+                  <el-option
+                    v-for="m in recommendedOptions"
+                    :key="m.name"
+                    :value="m.name"
+                    :label="m.name"
+                  >
+                    <div class="model-option">
+                      <span>{{ m.name }}</span>
+                      <span class="model-option-meta">
+                        <el-tag size="small" :type="m.installed ? 'success' : 'info'">
+                          {{ m.installed ? "已安装" : "未安装" }}
+                        </el-tag>
+                        <span class="model-option-hint">{{ m.tier_label }} · {{ m.size_hint }}</span>
+                      </span>
+                    </div>
+                  </el-option>
+                </el-option-group>
+                <el-option-group v-if="extraLocalModels.length > 0" label="本机已安装的其他模型">
+                  <el-option
+                    v-for="name in extraLocalModels"
+                    :key="name"
+                    :value="name"
+                    :label="name"
+                  >
+                    <div class="model-option">
+                      <span>{{ name }}</span>
+                      <el-tag size="small" type="success">已安装</el-tag>
+                    </div>
+                  </el-option>
+                </el-option-group>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="嵌入模型">
+              <el-input :model-value="DEFAULT_EMBEDDING_MODEL" disabled style="width: 420px" />
+              <div class="hint-text" style="margin-left: 0">
+                全局锁定:向量维度与存储结构绑定,切换将导致已有知识库检索失效
+              </div>
+            </el-form-item>
+          </el-form>
+
+          <el-alert
+            v-if="selectedModelInstalled"
+            type="success"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 16px"
+          >
+            <template #default>
+              所选模型已在本机,保存后即可使用,无需下载。
+            </template>
+          </el-alert>
+          <el-alert
+            v-else
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 16px"
+          >
+            <template #default>
+              所选模型尚未下载,保存设置后请点击"下载模型"(将触发 GB 级下载,建议先配置镜像源/代理)。
+            </template>
+          </el-alert>
+
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 16px"
+          >
+            <template #default>
+              切换对话模型只影响后续问答的生成质量与速度,不影响已有知识库数据,无需重建。
+            </template>
+          </el-alert>
+
+          <div class="settings-actions" style="margin-top: 0">
+            <el-button
+              type="primary"
+              :icon="DocumentCopy"
+              :loading="systemStore.savingSettings"
+              @click="onSaveSettings"
+            >
+              保存设置
+            </el-button>
+            <el-button
+              v-if="!effectiveModelInstalled"
+              type="warning"
+              :icon="Download"
+              :loading="systemStore.downloadingModels"
+              @click="onDownloadEffectiveModel"
+            >
+              下载模型 ({{ systemStore.effectiveChatModel }})
+            </el-button>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="模型下载源" name="download">
           <el-alert
             v-if="!allModelsInstalled"
@@ -219,10 +319,10 @@
               :icon="Download"
               @click="systemStore.downloadDefaultModels()"
             >
-              下载默认模型 (qwen3:1.7b + nomic-embed-text)
+              下载模型 ({{ systemStore.effectiveChatModel }} + {{ DEFAULT_EMBEDDING_MODEL }})
             </el-button>
             <span class="hint-text" style="margin-left: 12px">
-              下载约需 1.5GB 磁盘空间,建议先配置镜像源/代理
+              模型体积因所选档位而异(1.4GB ~ 9GB),建议先配置镜像源/代理
             </span>
           </div>
         </el-tab-pane>
@@ -316,14 +416,55 @@ import {
 } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { emit } from "@tauri-apps/api/event";
-import { useSystemStore, formatRate, formatEta } from "@/stores/system";
+import { useSystemStore, formatRate, formatEta, DEFAULT_EMBEDDING_MODEL } from "@/stores/system";
 import { useChatStore } from "@/stores/chat";
 import { api, events, type QueryOptions } from "@/api/invoke";
 
 const systemStore = useSystemStore();
 const chatStore = useChatStore();
 
-const settingsTab = ref<"qa" | "download" | "storage">("qa");
+const settingsTab = ref<"qa" | "model" | "download" | "storage">("qa");
+
+/** 选中的对话模型(get: 空串回退默认;set: 写入 settings.chat_model) */
+const selectedChatModel = computed({
+  get: () => systemStore.effectiveChatModel,
+  set: (v: string) => {
+    systemStore.settings.chat_model = v;
+  },
+});
+
+/** 推荐模型 + 安装状态标注 */
+const recommendedOptions = computed(() => {
+  const locals = systemStore.modelsOnDisk?.local_chat_models ?? [];
+  return systemStore.recommendedModels.map((m) => ({
+    ...m,
+    installed: locals.includes(m.name),
+  }));
+});
+
+/** 本机已安装但不在推荐表中的对话模型 */
+const extraLocalModels = computed(() => {
+  const locals = systemStore.modelsOnDisk?.local_chat_models ?? [];
+  const recommended = new Set(systemStore.recommendedModels.map((m) => m.name));
+  return locals.filter((m) => !recommended.has(m));
+});
+
+/** 所选(未保存)模型是否已在本机 */
+const selectedModelInstalled = computed(() => {
+  const locals = systemStore.modelsOnDisk?.local_chat_models ?? [];
+  return locals.includes(selectedChatModel.value);
+});
+
+/** 已保存生效的模型是否已在本机(决定"下载模型"按钮显隐) */
+const effectiveModelInstalled = computed(
+  () => systemStore.modelsOnDisk?.chat_model_installed === true
+);
+
+/** 保存后触发下载生效模型,并切到下载源 tab 查看进度 */
+async function onDownloadEffectiveModel() {
+  settingsTab.value = "download";
+  await systemStore.downloadDefaultModels();
+}
 
 /** 存储统计数据(store 中可能为 null,初次进入 tab 时拉取) */
 const storageStats = computed(() => systemStore.storageStats);
@@ -476,17 +617,23 @@ async function onSaveSettings() {
 
 // 并行加载所有设置，减少白屏时间
 async function loadSettingsParallel() {
-  const [, ,] = await Promise.all([
+  const [, , ,] = await Promise.all([
     systemStore.loadSettings().catch(() => {}),
     systemStore.checkModelsOnDisk().catch(() => {}),
     systemStore.checkSystem().catch(() => {}),
+    systemStore.loadRecommendedModels().catch(() => {}),
   ]);
 }
 
 onMounted(async () => {
-  // 先快速加载本地缓存的查询参数
+  // 先快速加载本地缓存的查询参数(含旧名键一次性迁移)
   try {
-    const cached = localStorage.getItem("zhishiku_query_options");
+    const legacy = localStorage.getItem("zhishiku_query_options");
+    if (legacy) {
+      localStorage.setItem("simplethinktank_query_options", legacy);
+      localStorage.removeItem("zhishiku_query_options");
+    }
+    const cached = localStorage.getItem("simplethinktank_query_options");
     if (cached) {
       const opts = JSON.parse(cached);
       localQueryOptions.value = { ...localQueryOptions.value, ...opts };
@@ -504,7 +651,7 @@ onMounted(async () => {
       const opts = JSON.parse(systemStore.settings.query_options);
       localQueryOptions.value = { ...localQueryOptions.value, ...opts };
       // 缓存到 localStorage
-      localStorage.setItem("zhishiku_query_options", systemStore.settings.query_options);
+      localStorage.setItem("simplethinktank_query_options", systemStore.settings.query_options);
     }
   } catch {
     // 解析失败保持默认
@@ -559,6 +706,24 @@ onMounted(async () => {
   font-size: 11px;
   color: var(--el-text-color-secondary);
   margin-left: 10px;
+}
+
+.model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.model-option-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-option-hint {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
 }
 
 .settings-actions {

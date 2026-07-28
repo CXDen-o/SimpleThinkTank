@@ -34,6 +34,10 @@ pub struct AppSettings {
     /// 问答参数 JSON,如 {"top_k":4,"temperature":0.7,"max_tokens":1024,"use_history":true}
     #[serde(default = "default_query_options")]
     pub query_options: String,
+    /// 对话模型名,空串表示默认(DEFAULT_CHAT_MODEL)
+    /// 嵌入模型全局锁定不可切换(向量维度与表结构绑定)
+    #[serde(default)]
+    pub chat_model: String,
 }
 
 fn default_max_retries() -> u32 {
@@ -60,6 +64,7 @@ impl Default for AppSettings {
             download_connect_timeout_secs: default_connect_timeout(),
             download_request_timeout_secs: default_request_timeout(),
             query_options: default_query_options(),
+            chat_model: String::new(),
         }
     }
 }
@@ -82,6 +87,15 @@ impl AppSettings {
     /// 是否启用镜像源
     pub fn registry_enabled(&self) -> bool {
         !self.ollama_registry.is_empty()
+    }
+
+    /// 生效的对话模型名(空串回退到默认 DEFAULT_CHAT_MODEL)
+    pub fn effective_chat_model(&self) -> &str {
+        if self.chat_model.is_empty() {
+            crate::ollama::DEFAULT_CHAT_MODEL
+        } else {
+            &self.chat_model
+        }
     }
 }
 
@@ -114,6 +128,7 @@ impl<'a> SettingsDao<'a> {
                     s.download_request_timeout_secs = v.parse().unwrap_or(600)
                 }
                 "query_options" => s.query_options = v,
+                "chat_model" => s.chat_model = v,
                 _ => {}
             }
         }
@@ -148,6 +163,7 @@ impl<'a> SettingsDao<'a> {
                 &settings.download_request_timeout_secs.to_string(),
             ),
             ("query_options", settings.query_options.as_str()),
+            ("chat_model", settings.chat_model.as_str()),
         ];
         for (k, v) in pairs {
             sqlx::query(

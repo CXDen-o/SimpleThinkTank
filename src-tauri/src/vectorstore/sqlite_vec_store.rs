@@ -17,6 +17,32 @@ impl SqliteVecStore {
     pub fn new(db: Db) -> Self {
         Self { db }
     }
+
+    /// 在给定事务内写入向量(先删后插实现覆盖),由调用方控制事务边界
+    pub async fn add_vectors_in(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        records: &[VectorRecord],
+    ) -> AppResult<()> {
+        for r in records {
+            // vec0 接受 JSON 文本向量,自动压缩为 float blob;
+            // vec0 虚拟表不支持 INSERT OR REPLACE 冲突策略,先删后插实现覆盖
+            let emb_json = serde_json::to_string(&r.embedding)?;
+            sqlx::query("DELETE FROM vec_chunks WHERE chunk_id = ?")
+                .bind(&r.chunk_id)
+                .execute(&mut **tx)
+                .await?;
+            sqlx::query(
+                "INSERT INTO vec_chunks(chunk_id, knowledge_base_id, embedding) VALUES (?, ?, ?)",
+            )
+            .bind(&r.chunk_id)
+            .bind(&r.knowledge_base_id)
+            .bind(&emb_json)
+            .execute(&mut **tx)
+            .await?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -32,23 +58,7 @@ struct VecSearchRow {
 impl VectorStore for SqliteVecStore {
     async fn add_vectors(&self, records: Vec<VectorRecord>) -> AppResult<()> {
         let mut tx = self.db.begin().await?;
-        for r in &records {
-            // vec0 接受 JSON 文本向量,自动压缩为 float blob;
-            // vec0 虚拟表不支持 INSERT OR REPLACE 冲突策略,先删后插实现覆盖
-            let emb_json = serde_json::to_string(&r.embedding)?;
-            sqlx::query("DELETE FROM vec_chunks WHERE chunk_id = ?")
-                .bind(&r.chunk_id)
-                .execute(&mut *tx)
-                .await?;
-            sqlx::query(
-                "INSERT INTO vec_chunks(chunk_id, knowledge_base_id, embedding) VALUES (?, ?, ?)",
-            )
-            .bind(&r.chunk_id)
-            .bind(&r.knowledge_base_id)
-            .bind(&emb_json)
-            .execute(&mut *tx)
-            .await?;
-        }
+        self.add_vectors_in(&mut tx, &records).await?;
         tx.commit().await?;
         Ok(())
     }
