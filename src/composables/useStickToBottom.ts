@@ -4,7 +4,7 @@
 //   回粘:看方向+位置——仅"向下滚动且距底 ≤ BOTTOM_THRESHOLD"才恢复跟随;
 //        向上滚动一律脱离(无论距底多近),位置不变不动状态——回粘永远不会覆盖一次上翻
 // 跟随滚动用 rAF 合帧:每帧最多写一次 scrollTop,避免高频 token 下的布局抖动
-// 方案变迁详见 docs/chat-stick-to-bottom.md
+// 方案变迁详见 docs/solutions/chat-stick-to-bottom.md
 
 import { ref, nextTick, onMounted, onUnmounted, type Ref } from "vue";
 

@@ -1,7 +1,7 @@
 {
   "name": "simplethinktank",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "智识库 - 本地私有化 RAG 桌面应用",
   "author": "CXDen-o",
   "license": "MIT",

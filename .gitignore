@@ -34,9 +34,10 @@ src-tauri/logs/
 src-tauri/WixTools/
 src-tauri/.cargo/
 
-# 项目内部文档(设计/需求文档,不公开)
+# 项目内部文档与 AI 协作规则(设计/需求文档,不公开)
 docs/
 src-tauri/PROGRESS.md
+AGENTS.md
 
 # 本地一次性开发脚本与测试残留(不入库)
 dl.ps1

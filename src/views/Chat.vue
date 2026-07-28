@@ -185,7 +185,7 @@ const systemStore = useSystemStore();
 const kbId = ref(props.id);
 const question = ref("");
 const messagesRef = ref<HTMLElement>();
-// 贴底跟随:上翻时流式输出不再强制滚动,回底/点按钮恢复(见 docs/chat-stick-to-bottom.md)
+// 贴底跟随:上翻时流式输出不再强制滚动,回底/点按钮恢复(见 docs/solutions/chat-stick-to-bottom.md)
 const { stickToBottom, followIfStuck, scrollToBottom, jumpToLatest } =
   useStickToBottom(messagesRef);
 const firstLaunchChecked = ref(false);
